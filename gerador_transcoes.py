@@ -1,129 +1,82 @@
+# arquivo: gerador_transacoes.py
+
 # -*- coding: utf-8 -*-
-
 """
 ================================================================================
-Passo 1.2: Geração do Histórico de Transações (Tabela de Fatos)
+SCRIPT 2: GERAÇÃO DA TABELA DE FATOS DE TRANSAÇÕES (F_TRANSACTIONS)
 ================================================================================
-Objetivo: Gerar um conjunto de dados sintético para a tabela de fatos de
-transações, vinculando cada transação a um cliente da dimensão D_CUSTOMER.
-
-Este script lê o arquivo 'd_customer.csv' e cria um novo arquivo CSV chamado
-'f_transactions.csv', simulando o comportamento transacional dos clientes
-ao longo do tempo.
+Objetivo: Gerar um histórico de transações para cada cliente, simulando a
+evolução de canais e tipos de transação ao longo do tempo.
+Este script lê 'd_customer.csv' e cria 'f_transactions.csv'.
 """
 
-# 1. Importação das bibliotecas necessárias
 import pandas as pd
 import numpy as np
 import random
 from datetime import datetime, timedelta
 
-# 2. Configuração inicial
+# --- CONFIGURAÇÃO INICIAL ---
 print("Iniciando a geração de dados de transações...")
 
-# Definições do comportamento transacional
+# Carrega os dados dos clientes. O script irá falhar se o arquivo não existir.
+df_clientes = pd.read_csv("d_customer.csv", parse_dates=["data_criacao_conta"])
+
+# Constantes que modelam o comportamento do mercado
 DATA_LANCAMENTO_PIX = datetime(2020, 11, 16)
-TIPOS_DE_TRANSACAO_PRE_PIX = ["Débito", "Crédito", "TED", "DOC", "Boleto"]
-TIPOS_DE_TRANSACAO_POS_PIX = [
-    "Débito",
-    "Crédito",
-    "TED",
-    "Boleto",
-    "PIX",
-    "PIX",
-]  # PIX duplicado para aumentar a probabilidade
-CANAIS = [
-    "Agência",
-    "Caixa Eletrônico",
-    "Internet Banking",
-    "Mobile App",
-    "Mobile App",
-    "Mobile App",
-]  # Mobile App triplicado
+DATA_CENARIO_ATUAL = datetime(2025, 10, 15)
 
-# Carrega os dados dos clientes gerados no passo anterior
-try:
-    df_clientes = pd.read_csv("d_customer.csv", parse_dates=["data_criacao_conta"])
-except FileNotFoundError:
-    print("ERRO: O arquivo 'd_customer.csv' não foi encontrado.")
-    print("Por favor, execute o script 'gerador_clientes.py' primeiro.")
-    exit()
-
-# 3. Geração das transações
+# --- LÓGICA DE GERAÇÃO ---
 lista_transacoes = []
 id_transacao_global = 1
 
-# Itera sobre cada cliente para gerar seu histórico de transações
-print(
-    f"Gerando transações para {len(df_clientes)} clientes. Isso pode levar alguns minutos..."
-)
-for index, cliente in df_clientes.iterrows():
-    customer_id = cliente["customer_id"]
-    data_abertura = cliente["data_criacao_conta"]
-    renda_cliente = cliente["faixa_renda_mensal"]
+# Itera sobre cada cliente para gerar o seu histórico individual
+for _, cliente in df_clientes.iterrows():
+    periodo_dias_cliente = (DATA_CENARIO_ATUAL - cliente["data_criacao_conta"]).days
+    if periodo_dias_cliente <= 0:
+        continue
 
-    # Define o número de transações a serem geradas para este cliente
-    # Clientes com scores mais altos tendem a transacionar mais
-    num_transacoes = int(np.random.normal(loc=150, scale=40))
-    # Ajusta o número de transações com base na renda
-    if "12001+" in renda_cliente:
-        num_transacoes *= 1.5
-    elif "8001" in renda_cliente:
-        num_transacoes *= 1.2
+    # O número de transações é influenciado pelo score de crédito do cliente
+    num_transacoes = int(
+        np.random.normal(loc=150, scale=40) * (cliente["score_de_credito"] / 700)
+    )
 
-    # Define o período em que as transações podem ocorrer para este cliente
-    data_hoje = datetime(2025, 10, 15)
-    periodo_dias = (data_hoje - data_abertura).days
-
-    if periodo_dias <= 0:
-        continue  # Pula clientes que abriram conta hoje e ainda não têm transações
-
-    for _ in range(int(num_transacoes)):
-        # --- Geração dos dados de cada transação ---
-
+    for _ in range(num_transacoes):
         # Gera uma data aleatória para a transação dentro do período de atividade do cliente
-        dias_aleatorios = random.randint(0, periodo_dias)
-        data_transacao = data_abertura + timedelta(days=dias_aleatorios)
+        data_transacao = cliente["data_criacao_conta"] + timedelta(
+            days=random.randint(0, periodo_dias_cliente)
+        )
 
-        # Determina o tipo de transação com base na data (era pré ou pós-PIX)
-        if data_transacao < DATA_LANCAMENTO_PIX:
-            tipo_transacao = random.choice(TIPOS_DE_TRANSACAO_PRE_PIX)
-        else:
-            # Após o lançamento do PIX, sua probabilidade aumenta com o tempo
+        # Simula a adoção do PIX: a probabilidade de usar PIX aumenta com o tempo após o seu lançamento
+        if data_transacao >= DATA_LANCAMENTO_PIX:
             dias_pos_pix = (data_transacao - DATA_LANCAMENTO_PIX).days
             prob_pix = min(
                 0.7, dias_pos_pix / (365 * 3.0)
             )  # Atinge 70% de chance em ~3 anos
-            if random.random() < prob_pix:
-                tipo_transacao = "PIX"
-            else:
-                tipo_transacao = random.choice(["Débito", "Crédito", "TED", "Boleto"])
-
-        # Gera o valor da transação
-        # Usamos uma distribuição log-normal para simular muitas transações pequenas e poucas grandes
-        if tipo_transacao == "Crédito":  # Compras de crédito tendem a ter valor maior
-            valor_transacao = round(np.random.lognormal(mean=4.5, sigma=1.0), 2)
-        elif tipo_transacao in ["TED", "PIX"]:
-            valor_transacao = round(np.random.lognormal(mean=5.0, sigma=1.2), 2)
+            tipo_transacao = (
+                "PIX"
+                if random.random() < prob_pix
+                else random.choice(["Débito", "Crédito", "TED", "Boleto"])
+            )
         else:
-            valor_transacao = round(np.random.lognormal(mean=3.8, sigma=0.8), 2)
+            tipo_transacao = random.choice(
+                ["Débito", "Crédito", "TED", "DOC", "Boleto"]
+            )
 
-        # Garante um valor mínimo
-        valor_transacao = max(1.00, valor_transacao)
+        # Simula a transformação digital: a probabilidade de usar um canal digital aumenta ao longo dos anos
+        prob_digital = min(0.9, (data_transacao.year - 2000) / 25.0)
+        canal = (
+            random.choice(["Mobile App", "Internet Banking"])
+            if random.random() < prob_digital
+            else random.choice(["Agência", "Caixa Eletrônico"])
+        )
 
-        # Define o canal, com maior probabilidade de ser digital com o passar do tempo
-        anos_desde_2000 = data_transacao.year - 2000
-        prob_digital = min(0.9, anos_desde_2000 / 25.0)  # Atinge 90% de chance em 2025
-        if random.random() < prob_digital:
-            canal = random.choice(["Mobile App", "Internet Banking"])
-        else:
-            canal = random.choice(["Agência", "Caixa Eletrônico"])
+        # O valor da transação segue uma distribuição log-normal (muitas transações pequenas, poucas grandes)
+        valor_transacao = max(1.00, round(np.random.lognormal(mean=4.0, sigma=1.2), 2))
 
-        # Adiciona a transação à lista
         lista_transacoes.append(
             {
                 "transaction_id": id_transacao_global,
-                "customer_id": customer_id,
+                "customer_id": cliente["customer_id"],
                 "data_transacao": data_transacao.strftime("%Y-%m-%d %H:%M:%S"),
                 "tipo_transacao": tipo_transacao,
                 "valor_transacao": valor_transacao,
@@ -132,22 +85,10 @@ for index, cliente in df_clientes.iterrows():
         )
         id_transacao_global += 1
 
-    # Imprime um feedback a cada 100 clientes processados
-    if (index + 1) % 100 == 0:
-        print(f"  ... {index + 1}/{len(df_clientes)} clientes processados.")
-
-# 4. Conversão para DataFrame e Salvamento
-print("Convertendo a lista de transações para um DataFrame do Pandas...")
+# --- FINALIZAÇÃO E EXPORTAÇÃO ---
 df_transacoes = pd.DataFrame(lista_transacoes)
+df_transacoes.to_csv("f_transactions.csv", index=False, encoding="utf-8-sig")
 
-# Salva o DataFrame em um arquivo CSV
-output_filename = "f_transactions.csv"
-df_transacoes.to_csv(output_filename, index=False, encoding="utf-8-sig")
-
-print("-" * 50)
 print(
-    f"Sucesso! O arquivo '{output_filename}' foi criado com {len(df_transacoes)} transações."
+    f"Sucesso! O arquivo 'f_transactions.csv' foi criado com {len(df_transacoes)} transações."
 )
-print("Abaixo estão as 5 primeiras linhas do arquivo gerado:")
-print(df_transacoes.head())
-print("-" * 50)

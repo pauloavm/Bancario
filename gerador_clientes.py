@@ -1,14 +1,13 @@
-# -*- coding: utf-8 -*-
+# arquivo: gerador_clientes.py
 
+# -*- coding: utf-8 -*-
 """
 ================================================================================
-Passo 1.1: Geração da Base de Clientes (Dimensão Cliente)
+SCRIPT 1: GERAÇÃO DA DIMENSÃO DE CLIENTES (D_CUSTOMER)
 ================================================================================
 Objetivo: Gerar um conjunto de dados sintético para a dimensão de clientes de
 um banco brasileiro fictício, cobrindo o período de 2000 a 2025.
-
-Este script cria um arquivo CSV chamado 'd_customer.csv' com dados demográficos
-e financeiros realistas para os clientes.
+Este script cria um arquivo CSV chamado 'd_customer.csv'.
 """
 
 # 1. Importação das bibliotecas necessárias
@@ -18,101 +17,69 @@ from faker import Faker
 from datetime import date, timedelta
 import random
 
-# 2. Configuração inicial
+# --- CONFIGURAÇÃO INICIAL ---
 print("Iniciando a geração de dados de clientes...")
 
-# Inicializa o Faker para gerar dados em português do Brasil
+# Inicializa o Faker para gerar dados em português do Brasil (nomes, cidades, etc.)
 fake = Faker("pt_BR")
 
-# Define o período de tempo para a aquisição de clientes
-data_inicio = date(2000, 1, 1)
-data_fim = date(2025, 10, 15)
-total_dias = (data_fim - data_inicio).days
+# Define o período de tempo para a aquisição de novos clientes no banco
+DATA_INICIO = date(2000, 1, 1)
+DATA_FIM = date(2025, 10, 15)
+TOTAL_DIAS_PERIODO = (DATA_FIM - DATA_INICIO).days
 
-# Define o número total de clientes a serem gerados
-# Simulando um grande banco, vamos gerar 15.000 clientes para este exemplo.
-# Este número pode ser aumentado para simular bancos maiores.
+# Define o número total de clientes a serem gerados para simular um banco de grande porte
 NUMERO_DE_CLIENTES = 15000
 
-# 3. Criação da lista de clientes
-# Esta lista armazenará os dados de cada cliente como um dicionário
+# --- LÓGICA DE GERAÇÃO ---
+# Lista para armazenar os dados de cada cliente antes de criar o DataFrame
 lista_clientes = []
 
 for i in range(NUMERO_DE_CLIENTES):
-    # --- Geração de Dados Demográficos ---
+    # Gera uma data de criação da conta ponderada, simulando um crescimento acelerado
+    # nos últimos anos (transformação digital), em vez de uma distribuição linear.
+    dias_desde_inicio = int(np.random.power(a=2.5) * TOTAL_DIAS_PERIODO)
+    data_criacao_conta = DATA_INICIO + timedelta(days=dias_desde_inicio)
+    data_criacao_conta = min(
+        data_criacao_conta, DATA_FIM
+    )  # Garante que não ultrapasse a data final
 
-    # Gera o nome do cliente
-    nome_completo = fake.name()
-
-    # Gera uma data de nascimento realista (entre 18 e 80 anos)
-    hoje = date.today()
+    # Gera uma data de nascimento realista para o cliente (entre 18 e 80 anos)
     data_nascimento = fake.date_of_birth(minimum_age=18, maximum_age=80)
-    idade = (hoje - data_nascimento) // timedelta(days=365.25)
 
-    # Gera localização (cidade e estado)
-    cidade = fake.city()
-    estado = fake.state_abbr()
-
-    # --- Geração de Dados Bancários e Financeiros ---
-
-    # Simula a data de criação da conta, com maior probabilidade de ser mais recente
-    # Usamos uma distribuição ponderada para simular crescimento acelerado nos últimos anos
-    dias_desde_inicio = int(np.random.power(a=2.5) * total_dias)
-    data_criacao_conta = data_inicio + timedelta(days=dias_desde_inicio)
-    # Garante que a data não ultrapasse o dia de hoje
-    if data_criacao_conta > data_fim:
-        data_criacao_conta = data_fim
-
-    # Simula a faixa de renda mensal em Reais (BRL)
-    faixas_de_renda = [
-        "0-1500",
-        "1501-3000",
-        "3001-5000",
-        "5001-8000",
-        "8001-12000",
-        "12001+",
-    ]
-    renda_mensal = random.choice(faixas_de_renda)
-
-    # Simula uma pontuação de crédito (Score)
-    # Scores mais baixos são mais comuns, então usamos uma distribuição que favorece isso
-    score_de_credito = max(300, min(950, int(np.random.normal(loc=650, scale=150))))
-
-    # 4. Adiciona o cliente à lista
+    # Adiciona os dados do cliente a um dicionário
     lista_clientes.append(
         {
-            "customer_id": 1000 + i,  # Cria um ID único para cada cliente
-            "nome_completo": nome_completo,
+            "customer_id": 1000 + i,
+            "nome_completo": fake.name(),
             "data_nascimento": data_nascimento,
-            "idade": idade,
-            "cidade": cidade,
-            "estado": estado,
+            "idade": (date.today() - data_nascimento) // timedelta(days=365.25),
+            "cidade": fake.city(),
+            "estado": fake.state_abbr(),
             "data_criacao_conta": data_criacao_conta,
-            "faixa_renda_mensal": renda_mensal,
-            "score_de_credito": score_de_credito,
+            "faixa_renda_mensal": random.choice(
+                [
+                    "0-1500",
+                    "1501-3000",
+                    "3001-5000",
+                    "5001-8000",
+                    "8001-12000",
+                    "12001+",
+                ]
+            ),
+            "score_de_credito": max(
+                300, min(950, int(np.random.normal(loc=650, scale=150)))
+            ),
         }
     )
 
-    # Imprime um feedback a cada 1000 clientes gerados
-    if (i + 1) % 1000 == 0:
-        print(f"{i + 1}/{NUMERO_DE_CLIENTES} clientes gerados...")
-
-# 5. Conversão para DataFrame do Pandas e Salvamento
-print("Convertendo a lista para um DataFrame do Pandas...")
+# --- FINALIZAÇÃO E EXPORTAÇÃO ---
+# Converte a lista de dicionários num DataFrame do Pandas
 df_clientes = pd.DataFrame(lista_clientes)
 
-# Ajusta os tipos de dados das colunas para otimização
-df_clientes["data_nascimento"] = pd.to_datetime(df_clientes["data_nascimento"])
-df_clientes["data_criacao_conta"] = pd.to_datetime(df_clientes["data_criacao_conta"])
+# Salva o DataFrame num arquivo CSV com codificação UTF-8 para suportar caracteres especiais
+df_clientes.to_csv("d_customer.csv", index=False, encoding="utf-8-sig")
 
-# Salva o DataFrame em um arquivo CSV
-output_filename = "d_customer.csv"
-df_clientes.to_csv(output_filename, index=False, encoding="utf-8-sig")
-
-print("-" * 50)
 print(
-    f"Sucesso! O arquivo '{output_filename}' foi criado com {len(df_clientes)} clientes."
+    f"Sucesso! O arquivo 'd_customer.csv' foi criado com {len(df_clientes)} clientes."
 )
-print("Abaixo estão as 5 primeiras linhas do arquivo gerado:")
-print(df_clientes.head())
-print("-" * 50)
